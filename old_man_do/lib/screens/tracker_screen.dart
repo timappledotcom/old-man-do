@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 import 'package:provider/provider.dart';
 import 'package:old_man_do/models/app_state.dart';
@@ -17,8 +18,14 @@ class _TrackerScreenState extends State<TrackerScreen> {
   bool _isTracking = false;
   bool _isShuffle = false; // false = Patrol (Walk), true = Shuffle (Jog)
   
-  double _distance = 0.0; // meters
-  Duration _duration = Duration.zero;
+  double _walkDistance = 0.0;
+  double _shuffleDistance = 0.0;
+  Duration _walkDuration = Duration.zero;
+  Duration _shuffleDuration = Duration.zero;
+
+  double get _totalDistance => _walkDistance + _shuffleDistance;
+  Duration get _totalDuration => _walkDuration + _shuffleDuration;
+
   Timer? _timer;
   StreamSubscription<Position>? _positionStream;
 
@@ -35,13 +42,22 @@ class _TrackerScreenState extends State<TrackerScreen> {
     if (status.isGranted) {
       setState(() {
         _isTracking = true;
-        _distance = 0.0;
-        _duration = Duration.zero;
+        _walkDistance = 0.0;
+        _shuffleDistance = 0.0;
+        _walkDuration = Duration.zero;
+        _shuffleDuration = Duration.zero;
       });
+
+      // Start Background Service
+      FlutterBackgroundService().startService();
 
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         setState(() {
-          _duration += const Duration(seconds: 1);
+          if (_isShuffle) {
+            _shuffleDuration += const Duration(seconds: 1);
+          } else {
+            _walkDuration += const Duration(seconds: 1);
+          }
         });
       });
 
@@ -80,7 +96,11 @@ class _TrackerScreenState extends State<TrackerScreen> {
         position.longitude,
       );
       setState(() {
-        _distance += dist;
+        if (_isShuffle) {
+          _shuffleDistance += dist;
+        } else {
+          _walkDistance += dist;
+        }
       });
     }
     _lastPosition = position;
@@ -90,13 +110,25 @@ class _TrackerScreenState extends State<TrackerScreen> {
     _timer?.cancel();
     _positionStream?.cancel();
     
+    // Stop Background Service
+    FlutterBackgroundService().invoke("stopService");
+
     // Save to history
-    if (_distance > 0) {
-      final appState = Provider.of<AppState>(context, listen: false);
+    final appState = Provider.of<AppState>(context, listen: false);
+    
+    if (_walkDistance > 0 || _walkDuration.inSeconds > 0) {
       appState.addMovementSession(
-        _isShuffle ? 'Shuffle' : 'Walk',
-        _distance,
-        _duration.inSeconds,
+        'Walk',
+        _walkDistance,
+        _walkDuration.inSeconds,
+      );
+    }
+
+    if (_shuffleDistance > 0 || _shuffleDuration.inSeconds > 0) {
+      appState.addMovementSession(
+        'Shuffle',
+        _shuffleDistance,
+        _shuffleDuration.inSeconds,
       );
     }
 
@@ -105,7 +137,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
       _lastPosition = null;
     });
     
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("PATROL LOGGED")));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("MISSION LOGGED: INTERVALS SAVED")));
   }
 
   String _formatDuration(Duration d) {
@@ -140,7 +172,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
               Text("PATROL (WALK)", style: TextStyle(fontWeight: !_isShuffle ? FontWeight.bold : FontWeight.normal)),
               Switch(
                 value: _isShuffle,
-                onChanged: _isTracking ? null : (val) => setState(() => _isShuffle = val),
+                onChanged: (val) => setState(() => _isShuffle = val),
               ),
               Text("SHUFFLE (JOG)", style: TextStyle(fontWeight: _isShuffle ? FontWeight.bold : FontWeight.normal)),
             ],
@@ -155,24 +187,49 @@ class _TrackerScreenState extends State<TrackerScreen> {
               ),
             ),
           
-          const SizedBox(height: 50),
+          const SizedBox(height: 30),
           
           // Stats
           Text(
-            (_distance / 1609.34).toStringAsFixed(2), // Meters to Miles
+            (_totalDistance / 1609.34).toStringAsFixed(2), // Meters to Miles
             style: const TextStyle(fontSize: 80, fontWeight: FontWeight.bold),
           ),
-          const Text("MILES", style: TextStyle(letterSpacing: 2)),
+          const Text("TOTAL MILES", style: TextStyle(letterSpacing: 2)),
+          
+          const SizedBox(height: 10),
+          
+          Text(
+            _formatDuration(_totalDuration),
+            style: const TextStyle(fontSize: 40, fontFamily: 'Monospace'),
+          ),
+          const Text("TOTAL DURATION", style: TextStyle(letterSpacing: 2)),
           
           const SizedBox(height: 20),
           
-          Text(
-            _formatDuration(_duration),
-            style: const TextStyle(fontSize: 40, fontFamily: 'Monospace'),
-          ),
-          const Text("DURATION", style: TextStyle(letterSpacing: 2)),
-          
-          const SizedBox(height: 50),
+          // Interval Breakdown
+          if (_isTracking)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                 Column(
+                   children: [
+                     const Text("WALK", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                     Text(_formatDuration(_walkDuration), style: const TextStyle(fontFamily: 'Monospace')),
+                     Text("${(_walkDistance / 1609.34).toStringAsFixed(2)} mi", style: const TextStyle(fontSize: 12)),
+                   ],
+                 ),
+                 Container(height: 30, width: 1, color: Colors.grey),
+                 Column(
+                   children: [
+                     const Text("SHUFFLE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                     Text(_formatDuration(_shuffleDuration), style: const TextStyle(fontFamily: 'Monospace')),
+                     Text("${(_shuffleDistance / 1609.34).toStringAsFixed(2)} mi", style: const TextStyle(fontSize: 12)),
+                   ],
+                 ),
+              ],
+            ),
+
+          const SizedBox(height: 30),
           
           // Controls
           if (!_isTracking)

@@ -7,8 +7,11 @@ import 'package:old_man_do/screens/snacks_screen.dart';
 import 'package:old_man_do/screens/tracker_screen.dart';
 import 'package:old_man_do/screens/analytics_screen.dart';
 import 'package:old_man_do/screens/field_manual_screen.dart';
+import 'package:old_man_do/services/background_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeService();
   runApp(const MyApp());
 }
 

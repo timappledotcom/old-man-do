@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:old_man_do/models/app_state.dart';
 import 'package:old_man_do/models/exercise.dart';
 
@@ -66,6 +67,10 @@ class _SnacksScreenState extends State<SnacksScreen> with SingleTickerProviderSt
     setState(() {
       _isTimerRunning = true;
     });
+    
+    // Start Background Service
+    FlutterBackgroundService().startService();
+
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds > 0) {
         setState(() {
@@ -84,6 +89,9 @@ class _SnacksScreenState extends State<SnacksScreen> with SingleTickerProviderSt
 
   void _stopTimer() {
     _timer?.cancel();
+    // Stop Background Service
+    FlutterBackgroundService().invoke("stopService");
+    
     setState(() {
       _isTimerRunning = false;
     });
