@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:old_man_do/models/app_state.dart';
+import 'package:old_man_do/models/weekly_schedule.dart';
+import 'package:old_man_do/models/circuit.dart';
 import 'package:old_man_do/utils/quotes.dart';
+import 'package:old_man_do/screens/circuit_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -33,6 +36,10 @@ class HomeScreen extends StatelessWidget {
           children: [
             // The Briefing Room
             _buildBriefingRoom(),
+            const SizedBox(height: 20),
+
+            // Today's Mission
+            _buildTodaysMission(context),
             const SizedBox(height: 20),
 
             // Mission Status Toggle
@@ -82,6 +89,88 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildTodaysMission(BuildContext context) {
+    final today = WeeklySchedule.getToday();
+    final dayName = WeeklySchedule.getTodayName();
+    
+    return Card(
+      elevation: 4,
+      color: const Color(0xFF2F4F4F),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, color: Colors.white70, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  "TODAY'S MISSION - ${dayName.toUpperCase()}",
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (today.morning != 'N/A') ...[
+              Row(
+                children: [
+                  const Icon(Icons.wb_sunny, color: Colors.orange, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      today.morning,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                const Icon(Icons.nightlight_round, color: Colors.indigo, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    today.evening,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            if (today.evening.contains('Circuit')) ...[
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('START CIRCUIT'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF556B2F),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CircuitScreen(
+                        circuit: Circuit.strengthAndSideKickCircuit,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMissionStatus(BuildContext context, AppState appState) {
     bool isOps = appState.isOnOps;
     return Card(
@@ -109,9 +198,8 @@ class HomeScreen extends StatelessWidget {
                 Switch(
                   value: isOps,
                   onChanged: (val) => appState.toggleMissionStatus(val),
-                  // ignore: deprecated_member_use
-                  activeColor: Colors.white,
-                  activeTrackColor: Colors.black26,
+                  thumbColor: WidgetStateProperty.all(Colors.white),
+                  trackColor: WidgetStateProperty.all(Colors.black26),
                 ),
                 Text(
                   "ON OPS",
@@ -154,11 +242,7 @@ class HomeScreen extends StatelessWidget {
               children: [
                 IconButton(
                   icon: const Icon(Icons.remove),
-                  onPressed: appState.waterIntake > 0 ? () {
-                    // Need a remove method or just reset for now, user asked for add/log
-                    // Implementing simple decrement logic locally if needed or just add
-                     // appState.removeWater(); // Not implemented yet
-                  } : null,
+                  onPressed: appState.waterIntake > 0 ? () => appState.removeWater() : null,
                 ),
                 IconButton(
                   icon: const Icon(Icons.add_circle, size: 32, color: Colors.blue),
@@ -187,6 +271,44 @@ class HomeScreen extends StatelessWidget {
         const SizedBox(height: 10),
         ElevatedButton.icon(
           icon: const Icon(Icons.fitness_center),
+          label: const Text("STRENGTH & SIDE KICK CIRCUIT"),
+          style: ElevatedButton.styleFrom(
+             padding: const EdgeInsets.symmetric(vertical: 20),
+             backgroundColor: const Color(0xFF556B2F),
+          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CircuitScreen(
+                  circuit: Circuit.strengthAndSideKickCircuit,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.restore),
+          label: const Text("MISSED CLASS FILLER (30 MIN)"),
+          style: ElevatedButton.styleFrom(
+             padding: const EdgeInsets.symmetric(vertical: 20),
+             backgroundColor: Colors.orange[800],
+          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CircuitScreen(
+                  circuit: Circuit.missedClassFiller,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.restaurant),
           label: const Text("EXERCISE SNACKS (5 MIN)"),
           style: ElevatedButton.styleFrom(
              padding: const EdgeInsets.symmetric(vertical: 20),

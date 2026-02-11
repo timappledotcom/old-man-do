@@ -22,6 +22,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
   double _shuffleDistance = 0.0;
   Duration _walkDuration = Duration.zero;
   Duration _shuffleDuration = Duration.zero;
+  double _lastPivotCheckDistance = 0.0;
 
   double get _totalDistance => _walkDistance + _shuffleDistance;
   Duration get _totalDuration => _walkDuration + _shuffleDuration;
@@ -37,7 +38,14 @@ class _TrackerScreenState extends State<TrackerScreen> {
   }
 
   Future<void> _startTracking() async {
+    // Request highest accuracy location permission
     var status = await Permission.location.request();
+    
+    // For best accuracy, also request background location if available
+    if (status.isGranted) {
+      await Permission.locationAlways.request();
+    }
+    
     if (!mounted) return;
     if (status.isGranted) {
       setState(() {
@@ -46,6 +54,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
         _shuffleDistance = 0.0;
         _walkDuration = Duration.zero;
         _shuffleDuration = Duration.zero;
+        _lastPivotCheckDistance = 0.0;
       });
 
       // Start Background Service
@@ -61,22 +70,22 @@ class _TrackerScreenState extends State<TrackerScreen> {
         });
       });
 
-      final LocationSettings locationSettings = const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+      // Use best possible GPS accuracy settings for Android
+      final LocationSettings locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation, // Highest accuracy available
+        distanceFilter: 1, // Update every 1 meter (was 10 - more frequent = more accurate)
+        forceLocationManager: false, // Use Google Play Services for better accuracy
+        intervalDuration: const Duration(seconds: 1), // Update every second
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationText: "Old Man Do is tracking your movement",
+          notificationTitle: "GPS Tracking Active",
+          enableWakeLock: true, // Keep CPU awake for better tracking
+        ),
       );
 
       _positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
         (Position? position) {
           if (position != null) {
-            // In a real app, we'd calculate distance between points.
-            // Simplified here: just accumulating simple distance if we had previous point.
-            // For now, let's just use speed * time or mock it, but Geolocator gives us coordinates.
-            // Better to just store start position and calculate total, but that's straight line.
-            // Accumulating delta is better.
-            // Implementing a simplified delta accumulator would require storing 'lastPosition'.
-            // For this snippet, I'll omit the complex geocalc logic and assume we just want to start the mechanism.
-            // Let's implement a basic accumulation.
             _updateDistance(position);
           }
         },
@@ -88,6 +97,12 @@ class _TrackerScreenState extends State<TrackerScreen> {
 
   Position? _lastPosition;
   void _updateDistance(Position position) {
+    // Filter out inaccurate GPS readings (accuracy threshold in meters)
+    // Only accept readings with accuracy better than 20 meters
+    if (position.accuracy > 20.0) {
+      return; // Skip this reading - not accurate enough
+    }
+    
     if (_lastPosition != null) {
       final double dist = Geolocator.distanceBetween(
         _lastPosition!.latitude,
@@ -95,15 +110,53 @@ class _TrackerScreenState extends State<TrackerScreen> {
         position.latitude,
         position.longitude,
       );
-      setState(() {
-        if (_isShuffle) {
-          _shuffleDistance += dist;
-        } else {
-          _walkDistance += dist;
+      
+      // Filter out unrealistic jumps (e.g., faster than 30 km/h = 8.33 m/s)
+      // This prevents GPS glitches from adding phantom distance
+      final double timeDiff = position.timestamp.difference(_lastPosition!.timestamp).inSeconds.toDouble();
+      if (timeDiff > 0) {
+        final double speedMps = dist / timeDiff;
+        if (speedMps > 8.33) {
+          // Too fast - likely GPS error, skip this reading
+          return;
         }
-      });
+      }
+      
+      // Only add distance if movement is significant (> 0.5 meters)
+      // This reduces GPS drift when stationary
+      if (dist > 0.5) {
+        setState(() {
+          if (_isShuffle) {
+            _shuffleDistance += dist;
+          } else {
+            _walkDistance += dist;
+          }
+          
+          // Check for pivot check reminder every 0.5 miles (804.67 meters)
+          if (_totalDistance - _lastPivotCheckDistance >= 804.67) {
+            _showPivotCheckReminder();
+            _lastPivotCheckDistance = _totalDistance;
+          }
+        });
+      }
     }
     _lastPosition = position;
+  }
+  
+  void _showPivotCheckReminder() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('🥋 PIVOT CHECK: Perform 5 slow-motion chambers'),
+        duration: const Duration(seconds: 5),
+        backgroundColor: const Color(0xFF556B2F),
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
   }
 
   void _stopTracking() {
@@ -135,6 +188,7 @@ class _TrackerScreenState extends State<TrackerScreen> {
     setState(() {
       _isTracking = false;
       _lastPosition = null;
+      _lastPivotCheckDistance = 0.0;
     });
     
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("MISSION LOGGED: INTERVALS SAVED")));

@@ -24,6 +24,9 @@ class AppState with ChangeNotifier {
   // Movement History
   List<Map<String, dynamic>> _movementHistory = [];
 
+  // Progressive Rep Tracking (exercise title -> current reps)
+  Map<String, int> _exerciseReps = {};
+
   bool get isOnOps => _isOnOps;
   int get waterIntake => _waterIntake;
   int get waterGoal => _waterGoal;
@@ -36,6 +39,19 @@ class AppState with ChangeNotifier {
   int get holdTime => _holdTime;
   List<Map<String, dynamic>> get weightHistory => _weightHistory;
   List<Map<String, dynamic>> get movementHistory => _movementHistory;
+  
+  // Get current reps for an exercise (default 5)
+  int getExerciseReps(String exerciseTitle) {
+    return _exerciseReps[exerciseTitle] ?? 5;
+  }
+  
+  // Increase reps for an exercise by 2
+  void increaseExerciseReps(String exerciseTitle) {
+    int currentReps = getExerciseReps(exerciseTitle);
+    _exerciseReps[exerciseTitle] = currentReps + 2;
+    _saveState();
+    notifyListeners();
+  }
 
   AppState() {
     _loadState();
@@ -57,6 +73,14 @@ class AppState with ChangeNotifier {
     _waterIntake++;
     _saveState();
     notifyListeners();
+  }
+  
+  void removeWater() {
+    if (_waterIntake > 0) {
+      _waterIntake--;
+      _saveState();
+      notifyListeners();
+    }
   }
   
   void resetWater() {
@@ -136,6 +160,13 @@ class AppState with ChangeNotifier {
       _movementHistory = List<Map<String, dynamic>>.from(json.decode(movementJson));
     }
     
+    // Load exercise reps (not daily reset - progressive over time)
+    String? repsJson = prefs.getString('exerciseReps');
+    if (repsJson != null) {
+      Map<String, dynamic> decoded = json.decode(repsJson);
+      _exerciseReps = decoded.map((key, value) => MapEntry(key, value as int));
+    }
+    
     notifyListeners();
   }
 
@@ -151,6 +182,7 @@ class AppState with ChangeNotifier {
     prefs.setInt('holdTime', _holdTime);
     prefs.setString('weightHistory', json.encode(_weightHistory));
     prefs.setString('movementHistory', json.encode(_movementHistory));
+    prefs.setString('exerciseReps', json.encode(_exerciseReps));
     
     // Ensure date is set so we know when to reset
     String today = DateTime.now().toIso8601String().split('T')[0];

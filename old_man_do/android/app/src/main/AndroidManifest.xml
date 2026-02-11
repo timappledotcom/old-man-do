@@ -1,8 +1,18 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- GPS Permissions for highest accuracy -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    
+    <!-- Foreground service permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- GPS hardware feature (optional but helps Play Store optimize device compatibility) -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    
     <application
         android:label="old_man_do"
         android:name="${applicationName}"
@@ -37,7 +47,9 @@
         
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="location|specialUse"
+            android:foregroundServiceType="location"
+            android:exported="false"
+            tools:replace="android:exported"
         />
     </application>
     <!-- Required to query activities that can process text, see:

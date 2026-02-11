@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+
+# Flutter build artifacts
+old_man_do/build/
+old_man_do/.dart_tool/
+old_man_do/.flutter-plugins
+old_man_do/.flutter-plugins-dependencies

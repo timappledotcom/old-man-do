@@ -103,6 +103,52 @@ class _SnacksScreenState extends State<SnacksScreen> with SingleTickerProviderSt
       _remainingSeconds = 300;
     });
   }
+  
+  void _completeExercise(String exerciseTitle, bool hasReps) {
+    if (!hasReps) {
+      // Time-based stretch, just show completion
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$exerciseTitle completed! ✓')),
+      );
+      return;
+    }
+    
+    // Rep-based exercise, ask about difficulty
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('EXERCISE COMPLETE'),
+        content: Text('Was $exerciseTitle difficult?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Not difficult - increase reps
+              final appState = Provider.of<AppState>(context, listen: false);
+              appState.increaseExerciseReps(exerciseTitle);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$exerciseTitle: Reps increased to ${appState.getExerciseReps(exerciseTitle)}! 💪'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text('NOT DIFFICULT'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Difficult - keep same
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$exerciseTitle completed! ✓')),
+              );
+            },
+            child: const Text('DIFFICULT'),
+          ),
+        ],
+      ),
+    );
+  }
 
   String _formatTime(int seconds) {
     int m = seconds ~/ 60;
@@ -193,6 +239,8 @@ class _SnacksScreenState extends State<SnacksScreen> with SingleTickerProviderSt
   }
 
   Widget _buildExerciseList(List<Exercise> exercises, bool isStrength, bool isRecommended) {
+    final appState = Provider.of<AppState>(context);
+    
     return Column(
       children: [
         if (!isRecommended)
@@ -226,28 +274,30 @@ class _SnacksScreenState extends State<SnacksScreen> with SingleTickerProviderSt
               final isDark = Theme.of(context).brightness == Brightness.dark;
               
               // Define colors based on recommendation status
-              // Recommended: Military Slate/Olive with White Text (Active)
-              // Not Recommended: Greyed out / Muted (Inactive)
-              
-              final cardColor = isRecommended 
-                  ? Theme.of(context).colorScheme.surface // Use surface (dark or light)
-                  : (isDark ? Colors.grey[900] : Colors.grey[300]);
-              
-              final textColor = isRecommended
-                  ? Theme.of(context).colorScheme.onSurface
-                  : (isDark ? Colors.white38 : Colors.black38);
-
-              // Override for high visibility if the default surface isn't contrasting enough
-              // Actually, let's use the Slate color for recommended items to pop against the background
               final activeCardColor = const Color(0xFF2F4F4F); // Slate
               final activeTextColor = Colors.white;
               
               final inactiveCardColor = isDark ? Colors.black45 : Colors.grey[300];
               final inactiveTextColor = isDark ? Colors.grey[600] : Colors.grey[600];
+              
+              // Determine if this exercise uses dynamic reps
+              bool hasReps = ex.reps != null && ex.reps!.contains('Start:');
+              String displayReps = ex.reps ?? '';
+              
+              if (hasReps) {
+                // Show current dynamic reps
+                int currentReps = appState.getExerciseReps(ex.title);
+                if (displayReps.contains('/leg') || displayReps.contains('/side')) {
+                  displayReps = '$currentReps reps/side';
+                } else {
+                  displayReps = '$currentReps reps';
+                }
+              }
 
               return Card(
                 color: isRecommended ? activeCardColor : inactiveCardColor,
                 child: ListTile(
+                  enabled: isRecommended,
                   title: Text(
                     ex.title, 
                     style: TextStyle(
@@ -255,16 +305,43 @@ class _SnacksScreenState extends State<SnacksScreen> with SingleTickerProviderSt
                       color: isRecommended ? activeTextColor : inactiveTextColor
                     )
                   ),
-                  subtitle: Text(
-                    ex.description,
-                    style: TextStyle(
-                      color: isRecommended ? activeTextColor.withOpacity(0.9) : inactiveTextColor?.withOpacity(0.8)
-                    )
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (ex.reps != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4.0),
+                          child: Text(
+                            "TARGET: $displayReps",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: isRecommended 
+                                ? Colors.amber[300] 
+                                : inactiveTextColor?.withOpacity(0.6),
+                            ),
+                          ),
+                        ),
+                      Text(
+                        ex.description,
+                        style: TextStyle(
+                          color: isRecommended ? activeTextColor.withOpacity(0.9) : inactiveTextColor?.withOpacity(0.8)
+                        )
+                      ),
+                    ],
                   ),
-                  trailing: Icon(
-                    isStrength ? Icons.fitness_center : Icons.accessibility_new,
-                    color: isRecommended ? activeTextColor : inactiveTextColor,
-                  ),
+                  trailing: isRecommended 
+                    ? IconButton(
+                        icon: Icon(
+                          Icons.check_circle_outline,
+                          color: activeTextColor,
+                        ),
+                        onPressed: () => _completeExercise(ex.title, hasReps),
+                      )
+                    : Icon(
+                        isStrength ? Icons.fitness_center : Icons.accessibility_new,
+                        color: inactiveTextColor,
+                      ),
                 ),
               );
             },
